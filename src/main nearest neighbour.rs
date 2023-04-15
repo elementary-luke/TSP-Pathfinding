@@ -1,4 +1,4 @@
-// BRUTE FORCE METHOD
+// NEAREST NEIGHBOUR
 
 
 use std::fs::File;
@@ -50,34 +50,46 @@ fn main()
     }
     //places.push(end_pos);
 
-    let mut dist_hm : HashMap<(usize, usize), f64> = HashMap::new();
-    let mut items : Vec<usize> = (1..places.len()-1).collect();
-    for perm in items.iter().combinations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
+    let mut dist_vec : Vec<((usize, usize), f64)> = vec![];
+    let mut items : Vec<usize> = (0..places.len()).collect();
+    for perm in items.iter().permutations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
     {
         let mut dist = ((places[*perm[0]].x - places[*perm[1]].x).powf(2.0) + (places[*perm[0]].y - places[*perm[1]].y).powf(2.0)).sqrt();
-        dist_hm.insert((min(*perm[0], *perm[1]), max(*perm[0], *perm[1])), dist);
+        dist_vec.push( ((*perm[0], *perm[1]), dist) );
     }
 
-    let mut worst_dist : f64 = 0.0;
-    let mut best_dist : f64= 1000000.0;
-    for(i, perm) in items.iter().permutations(items.len()).unique().enumerate()
+
+    let mut start = Instant::now();
+    dist_vec.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    let mut total_dist : f64 = 0.0;
+    let mut path = vec![];
+    let mut current : usize = 0;
+    for i in 0..places.len()
     {
-        let mut total_dist = 0.0;
-        for i in 0..perm.len()-1
+        for j in dist_vec.iter()
         {
-            total_dist += dist_hm.get(&(min(*perm[i], *perm[i+1]), max(*perm[i], *perm[i+1]))).unwrap();
-        }
-        total_dist += ((places[*perm[0]].x - places[0].x).powf(2.0) + (places[*perm[0]].y - places[0].y).powf(2.0)).sqrt(); // start to first place
-        total_dist += ((places[*perm[1]].x - places[0].x).powf(2.0) + (places[*perm[1]].y - places[0].y).powf(2.0)).sqrt(); // last place to start
-        if total_dist < best_dist
-        {
-            best_dist = total_dist;
-        }
-        if total_dist > worst_dist
-        {
-            worst_dist = total_dist;
+            if j.0.0 == current && j.0.1 != 0 // make sure we dont go back to the start point prematurely
+            {
+                let last = current.to_owned();
+                total_dist += j.1;
+                path.push(current);
+                current = j.0.1;
+                println!("{} -> {} : {}m", last, current, j.1);
+                if j.0.0 != 0
+                {
+                    dist_vec.retain(|x| x.0.1 != last);
+                }
+                break;
+            }
         }
     }
-    println!("best {}m, \n worst: {}m", best_dist, worst_dist);
+    dist_vec.retain(|x| x.0.0 == current && x.0.1 == 0);
+    path.push(current);
+
+    total_dist += dist_vec[0].1; // add the distance from the last place to the start
+    println!("{} -> 0 : {}m", current, dist_vec[0].1);
+    path.push(0);
+    println!("dist : {}m path: {:?}",total_dist, path);
+    
     println!("took {} seconds to complete", start.elapsed().as_secs_f64());
 }

@@ -31,7 +31,6 @@ impl Place
 }
 fn main() 
 {
-    let mut start = Instant::now();
     let start_pos : Place = Place::new(0.0, 0.0);
     //let end_pos : Place = Place::new(40.0, 40.0);
     // create positions from text file
@@ -51,7 +50,7 @@ fn main()
     //places.push(end_pos);
 
     let mut dist_hm : HashMap<(usize, usize), f64> = HashMap::new();
-    let mut items : Vec<usize> = (1..places.len()-1).collect();
+    let mut items : Vec<usize> = (1..places.len()).collect();
     for perm in items.iter().combinations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
     {
         let dist = ((places[*perm[0]].x - places[*perm[1]].x).powf(2.0) + (places[*perm[0]].y - places[*perm[1]].y).powf(2.0)).sqrt();
@@ -61,7 +60,7 @@ fn main()
 
     // slower because overhead of creating threads
     // might be better to manually do with smaller threadpool
-    start = Instant::now();
+    let mut start = Instant::now();
     let mut dists : Vec<f64> = items.iter().permutations(items.len()).unique().par_bridge().map( |perm| {
         let mut total_dist : f64= 0.0;
         for i in 0..perm.len()-1
