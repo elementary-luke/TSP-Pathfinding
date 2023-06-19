@@ -1,4 +1,5 @@
 // NEAREST NEIGHBOUR
+//TODO TEST MORE
 
 
 use std::fs::File;
