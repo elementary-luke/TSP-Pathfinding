@@ -1,16 +1,13 @@
-// ant colony
+// christofides
 use std::f32::consts::E;
 use std::fs::File;
 use std::io::{self, BufRead};
-use std::path::{Path, self};
+use std::path::Path;
 use itertools::{Itertools as it, enumerate};
-use rand::distributions::WeightedIndex;
-use rand::distributions::weighted::alias_method::Weight;
 use rayon::vec;
 use std::collections::HashMap;
 use std::cmp::{min, max};
 use std::time::{Duration, Instant};
-use rand::prelude::*;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {
@@ -35,7 +32,6 @@ impl Place
 }
 fn main() 
 {
-    
     //let end_pos : Place = Place::new(40.0, 40.0);
     // create positions from text file
     let mut places : Vec<Place> = vec![];
@@ -66,88 +62,133 @@ fn main()
     }
     
     let mut start = Instant::now();
+    dist_vec.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-    let antn = 5;
-    let mut reward_matrix = vec![vec![1.0; places.len()]; places.len()];
-    let mut best_edges : Vec<(usize, usize)> = vec![];
-    let mut best_cost = f64::INFINITY;
+    //get min span tree
+    places = find_mst(places.clone(), dist_vec.clone()).0;
+    let mut odd_degrees : Vec<usize> = vec![];
 
-    for _ in 0..8000
+    for i in 0..places.len()
     {
-        for i in 0..antn
+        if places[i].links.len() % 2 != 0
         {
-            let mut edges : Vec<(usize, usize)> = vec![];
-            let start : usize = rand::thread_rng().gen_range(0..places.len());
-            let mut current = start;
-            let mut visited : Vec<usize> = vec![];
-            let mut cost : f64= 0.0;
-            loop
+            odd_degrees.push(i);
+        }
+    }
+
+    //find minimum weight matching
+    let mut best_pairs : Vec<(usize, usize)> = vec![];
+    let mut best_time : f64 = f64::INFINITY;
+    let old_odd_degrees = odd_degrees.clone();
+    for i in 0..old_odd_degrees.len()
+    {
+        odd_degrees = old_odd_degrees.clone();
+        odd_degrees.remove(i);
+        odd_degrees.insert(0, old_odd_degrees[i]);
+        let mut time : f64= 0.0;
+        let mut pairs : Vec<(usize, usize)> = vec![];
+        loop 
+        {
+            if odd_degrees.len() == 0
             {
-                if visited.len() == places.len() - 1
-                {
-                    break;
-                }
-                //get possible edges
-                let mut dists_to_neighbours = dist_vec.clone();
-                dists_to_neighbours.retain(|&x| x.0.0 == current || x.0.1 == current);
-                dists_to_neighbours.retain(|&x| !visited.contains(&x.0.0) && !visited.contains(&x.0.1));
-                dists_to_neighbours.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-                //calculate distribution
-                let sum_of_inverses = dists_to_neighbours.iter().map(|x| 1.0 / x.1).sum::<f64>();
-                for i in 0..dists_to_neighbours.len()
-                {
-                    let reward = reward_matrix[dists_to_neighbours[i].0.0][dists_to_neighbours[i].0.1];
-                    dists_to_neighbours[i].1 = (1.0 / dists_to_neighbours[i].1) * reward / (sum_of_inverses * reward);
-                }
-
-                //get next position based on distribution
-                let choices = dists_to_neighbours.iter().map(|x| x.0).collect::<Vec<(usize, usize)>>();
-                let weights = dists_to_neighbours.iter().map(|x| x.1).collect::<Vec<f64>>();
-                let dist = WeightedIndex::new(&weights).unwrap();
-                let mut rng = rand::thread_rng();
-                let next = choices[dist.sample(&mut rng)];
-                // if next.0 != current
-                // {
-                //     let temp = next.0;
-                //     next.0 = next.1;
-                //     next.1 = temp;
-                // }
-
-                edges.push(next);
-                cost += dist_hm.get(&next).unwrap();
-                visited.push(current);
-                if next.0 == current
-                {
-                    current = next.1;
-                }
-                else
-                {
-                    current = next.0;
-                }
+                break;
             }
+            let current = odd_degrees[0];
 
-            //add final link back to start
-            edges.push((current, start));
-            cost += dist_hm.get(&(min(current, start), max(current, start))).unwrap();
+            let mut dv = dist_vec.clone();
+            dv.retain(|&x| (odd_degrees.contains(&x.0.0) && x.0.1 == current || x.0.0 == current && odd_degrees.contains(&x.0.1)));
+            pairs.push(dv[0].0);
+            time += dv[0].1;
+            let index = odd_degrees.iter().position(|x| *x == dv[0].0.0).unwrap();
+            odd_degrees.remove(index);
+            let index = odd_degrees.iter().position(|x| *x == dv[0].0.1).unwrap();
+            odd_degrees.remove(index);
+        }
+        if time < best_time
+        {
+            best_time = time;
+            best_pairs = pairs.clone();
+            //println!("{}: {:?}", best_time, best_pairs)
+        }
+    }
+    println!("{:?}", best_pairs);
 
-            //update best
-            if cost < best_cost
+    let mut need_to_visit : Vec<usize> = vec![];
+    for i in 0..places.len()
+    {
+        for j in 0..places[i].links.len()
+        {
+            if !need_to_visit.contains(&places[i].links[j])
             {
-                best_cost = cost;
-                best_edges = edges.clone();
-            }
-
-            //update reward matrix
-            for j in edges
-            {
-                reward_matrix[j.0][j.1] += 1.0 / cost;
-                reward_matrix[j.1][j.0] += 1.0 / cost;
+                need_to_visit.push(places[i].links[j]);
             }
         }
     }
-    println!("best edges: {:?}", best_edges);
-    println!("best cost: {}", best_cost);
+    for i in best_pairs.clone()
+    {
+        need_to_visit.push(i.0);
+        need_to_visit.push(i.1);
+    }
+
+    //combine into multigraph
+    for i in best_pairs
+    {
+        places[i.0].links.push(i.1);
+        places[i.1].links.push(i.0);
+    }
+    for i in 0..places.len()
+    {
+        println!("{i}: {:?}", places[i].links);
+    }
+
+    //do eularian tour
+    let mut path : Vec<usize> = vec![];
+    let mut current = 0;
+    
+    'outer : loop
+    {
+        if places[current].links.len() == 0
+        {
+            break;
+        }
+        path.push(current);
+        let mut next : usize = places[current].links[0];
+        for i in places[current].links.iter()
+        {
+            // if current == 6
+            // {
+            //     println!("{:?}",  places[current].links[0]);
+            //     println!("{i}: {:?}", places[*i].links);
+            // }
+            if places[*i].links.len() == 2 && places[*i].links[0] == current && places[*i].links[1] == current
+            {
+                println!("ASDASD {}", *i);
+                path.push(*i);
+                let index = places[current].links.iter().position(|x| *x == *i).unwrap();
+                places[current].links.remove(index);
+                continue 'outer
+            }
+        }
+        places[current].links.remove(0);
+        let index = places[next].links.iter().position(|x| *x == current).unwrap();
+        places[next].links.remove(index);
+        current = next;
+    }
+    println!("{:?}", path);
+
+    let mut new_path : Vec<usize> = vec![];
+    let mut visited : Vec<usize> = vec![];
+
+    for i in path
+    {
+        if !visited.contains(&i)
+        {
+            visited.push(i);
+            new_path.push(i);
+        }
+    }
+    new_path.push(0);
+    println!("{:?}", new_path);
 }
 
 fn find_mst(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>) -> (Vec<Place>, f64)
