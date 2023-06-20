@@ -76,114 +76,90 @@ fn main()
         }
     }
 
-    //find mimimum weight matching
-    //odd_degrees.reverse();
-    println!("odd_degrees: {:?}", odd_degrees.len());
-    let mut matrix :Vec<Vec<f64>> = vec![];
-    for i in 0..odd_degrees.len()
+    //find minimum weight matching
+    let mut best_pairs : Vec<(usize, usize)> = vec![];
+    let mut best_time : f64 = f64::INFINITY;
+    let old_odd_degrees = odd_degrees.clone();
+    for i in 0..old_odd_degrees.len()
     {
-        let mut row : Vec<f64> = vec![];
-        for j in 0..odd_degrees.len()
+        odd_degrees = old_odd_degrees.clone();
+        odd_degrees.remove(i);
+        odd_degrees.insert(0, old_odd_degrees[i]);
+        let mut time : f64= 0.0;
+        let mut pairs : Vec<(usize, usize)> = vec![];
+        loop 
         {
-            if i == j
+            if odd_degrees.len() == 0
             {
-                row.push(-4.0);
-                continue;
+                break;
             }
-            row.push(dist_hm.get(&(min(odd_degrees[i], odd_degrees[j]), max(odd_degrees[i], odd_degrees[j]))).unwrap().clone());
+            let current = odd_degrees[0];
+
+            let mut dv = dist_vec.clone();
+            dv.retain(|&x| (odd_degrees.contains(&x.0.0) && x.0.1 == current || x.0.0 == current && odd_degrees.contains(&x.0.1)));
+            pairs.push(dv[0].0);
+            time += dv[0].1;
+            let index = odd_degrees.iter().position(|x| *x == dv[0].0.0).unwrap();
+            odd_degrees.remove(index);
+            let index = odd_degrees.iter().position(|x| *x == dv[0].0.1).unwrap();
+            odd_degrees.remove(index);
         }
-        matrix.push(row);
-    }
-
-    for i in 0..matrix.len()
-    {
-        println!("{:.2?}", matrix[i]);
-    }
-    println!("\n");
-
-    //row reduction
-    for i in 0..matrix.len()
-    {
-        let min = matrix[i].iter().filter(|x| **x >= 0.0).min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap().clone();
-       matrix[i] = matrix[i].iter().map(|x| x - min).collect::<Vec<f64>>();
-    }
-    for i in 0..matrix.len()
-    {
-        println!("{:.2?}", matrix[i]);
-    }
-    println!("\n");
-
-    //column reduction
-    for i in 0..matrix.len()
-    {
-        let mut col : Vec<f64> = vec![];
-        for j in 0..matrix.len()
+        if time < best_time
         {
-            col.push(matrix[j][i]);
-        }
-        let min = col.iter().filter(|x| **x >= 0.0).min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap().clone();
-        for j in 0..matrix.len()
-        {
-            matrix[j][i] -= min;
+            best_time = time;
+            best_pairs = pairs.clone();
+            //println!("{}: {:?}", best_time, best_pairs)
         }
     }
-    for i in 0..matrix.len()
-    {
-        println!("{:.2?}", matrix[i]);
-    }
-    println!("\n");
+    println!("{:?}", best_pairs);
 
-    let mut pairs : Vec<(usize, usize)> = vec![];
-    //pick 0s
-    for _ in 0..3
+    // let mut need_to_visit : Vec<usize> = vec![];
+    // for i in 0..places.len()
+    // {
+    //     for j in 0..places[i].links.len()
+    //     {
+    //         if !need_to_visit.contains(&places[i].links[j])
+    //         {
+    //             need_to_visit.push(places[i].links[j]);
+    //         }
+    //     }
+    // }
+    // for i in best_pairs.clone()
+    // {
+    //     need_to_visit.push(i.0);
+    //     need_to_visit.push(i.1);
+    // }
+
+    //combine into multigraph
+    for i in best_pairs
     {
-        if pairs.len() == 100
+        places[i.0].links.push(i.1);
+        places[i.1].links.push(i.0);
+    }
+    for i in 0..places.len()
+    {
+        println!("{i}: {:?}", places[i].links);
+    }
+
+    //do eularian tour
+    let mut path : Vec<usize> = vec![];
+    let mut current = 0;
+    
+    loop
+    {
+        //need_to_visit.remove(need_to_visit.iter().position(|x| *x == current).unwrap());
+        if places[current].links.len() == 0
         {
             break;
         }
-        for i in 0..matrix.len()
-        {
-            if matrix[i].iter().filter(|&x| *x == 0.0 || *x == -0.0).count() == 1
-            {
-                let j = matrix[i].iter().position(|x| *x == 0.0 || *x == -0.0).unwrap();
-                matrix[i][j] = -6.0;
-                
-                pairs.push((odd_degrees[i], odd_degrees[j]));
-                // pairs.push((i, j));
-
-                //strike out 0s in same column
-                for k in 0..matrix.len()
-                {
-                    matrix[k][j] = -6.0
-                }
-                matrix[j][i] = -6.0;
-                break;
-            }
-            
-        }
-        for k in 0..matrix.len()
-        {
-            println!("{:.2?}", matrix[k]);
-        }
-        println!("a\n");
+        path.push(current);
+        let temp = places[current].links[0];
+        places[current].links.remove(0);
+        let index = places[temp].links.iter().position(|x| *x == current).unwrap();
+        places[temp].links.remove(index);
+        current = temp;
     }
-    println!("{:?}", pairs);
-
-    //vid original
-    let mut c = 0.0;
-    c += dist_hm.get(&(7, 10)).unwrap().clone();
-    c += dist_hm.get(&(3, 6)).unwrap().clone();
-    c += dist_hm.get(&(9, 11)).unwrap().clone();
-    c += dist_hm.get(&(1, 12)).unwrap().clone();
-
-    let mut d = 0.0;
-    d += dist_hm.get(&(1, 12)).unwrap().clone();
-    d += dist_hm.get(&(3, 6)).unwrap().clone();
-    d += dist_hm.get(&(7, 11)).unwrap().clone();
-    d += dist_hm.get(&(9, 10)).unwrap().clone();
-
-    println!("{odd_degrees:?} {c} {d}");
-
+    println!("{:?}", path);
 }
 
 fn find_mst(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>) -> (Vec<Place>, f64)
