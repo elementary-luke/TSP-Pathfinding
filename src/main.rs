@@ -113,22 +113,22 @@ fn main()
     }
     println!("{:?}", best_pairs);
 
-    // let mut need_to_visit : Vec<usize> = vec![];
-    // for i in 0..places.len()
-    // {
-    //     for j in 0..places[i].links.len()
-    //     {
-    //         if !need_to_visit.contains(&places[i].links[j])
-    //         {
-    //             need_to_visit.push(places[i].links[j]);
-    //         }
-    //     }
-    // }
-    // for i in best_pairs.clone()
-    // {
-    //     need_to_visit.push(i.0);
-    //     need_to_visit.push(i.1);
-    // }
+    let mut need_to_visit : Vec<usize> = vec![];
+    for i in 0..places.len()
+    {
+        for j in 0..places[i].links.len()
+        {
+            if !need_to_visit.contains(&places[i].links[j])
+            {
+                need_to_visit.push(places[i].links[j]);
+            }
+        }
+    }
+    for i in best_pairs.clone()
+    {
+        need_to_visit.push(i.0);
+        need_to_visit.push(i.1);
+    }
 
     //combine into multigraph
     for i in best_pairs
@@ -145,21 +145,50 @@ fn main()
     let mut path : Vec<usize> = vec![];
     let mut current = 0;
     
-    loop
+    'outer : loop
     {
-        //need_to_visit.remove(need_to_visit.iter().position(|x| *x == current).unwrap());
         if places[current].links.len() == 0
         {
             break;
         }
         path.push(current);
-        let temp = places[current].links[0];
+        let mut next : usize = places[current].links[0];
+        for i in places[current].links.iter()
+        {
+            // if current == 6
+            // {
+            //     println!("{:?}",  places[current].links[0]);
+            //     println!("{i}: {:?}", places[*i].links);
+            // }
+            if places[*i].links.len() == 2 && places[*i].links[0] == current && places[*i].links[1] == current
+            {
+                println!("ASDASD {}", *i);
+                path.push(*i);
+                let index = places[current].links.iter().position(|x| *x == *i).unwrap();
+                places[current].links.remove(index);
+                continue 'outer
+            }
+        }
         places[current].links.remove(0);
-        let index = places[temp].links.iter().position(|x| *x == current).unwrap();
-        places[temp].links.remove(index);
-        current = temp;
+        let index = places[next].links.iter().position(|x| *x == current).unwrap();
+        places[next].links.remove(index);
+        current = next;
     }
     println!("{:?}", path);
+
+    let mut new_path : Vec<usize> = vec![];
+    let mut visited : Vec<usize> = vec![];
+
+    for i in path
+    {
+        if !visited.contains(&i)
+        {
+            visited.push(i);
+            new_path.push(i);
+        }
+    }
+    new_path.push(0);
+    println!("{:?}", new_path);
 }
 
 fn find_mst(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>) -> (Vec<Place>, f64)
