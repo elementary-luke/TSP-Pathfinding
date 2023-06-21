@@ -39,52 +39,101 @@ impl Place
 }
 fn main() 
 {
+    loop
+    {
+        //let end_pos : Place = Place::new(40.0, 40.0);
+        // create positions from text file
+        let mut places : Vec<Place> = vec![];
+        // if let Ok(lines) = read_lines("places.txt") 
+        // {
+        //     for line in lines 
+        //     {
+        //         if let Ok(l) = line 
+        //         {
+        //             let temp = l.split(",").map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>();
+        //             places.push(Place::new(temp[0], temp[1]));
+        //         }
+        //     }
+        // }
+
+        for _ in 0..thread_rng().gen_range(4..50)
+        {
+            places.push(Place::new(thread_rng().gen_range(0.0..100.0), thread_rng().gen_range(0.0..100.0)));
+        }
+
+        let mut dist_vec : Vec<((usize, usize), f64)> = vec![];
+        let items : Vec<usize> = (0..places.len()).collect();
+        for comb in items.iter().combinations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
+        {
+            let dist = ((places[*comb[0]].x - places[*comb[1]].x).powf(2.0) + (places[*comb[0]].y - places[*comb[1]].y).powf(2.0)).sqrt();
+            dist_vec.push( ((*comb[0], *comb[1]), dist) );
+        }
+        let mut dist_hm : HashMap<(usize, usize), f64> = HashMap::new();
+        for comb in items.iter().combinations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
+        {
+            let dist = ((places[*comb[0]].x - places[*comb[1]].x).powf(2.0) + (places[*comb[0]].y - places[*comb[1]].y).powf(2.0)).sqrt();
+            dist_hm.insert((min(*comb[0], *comb[1]), max(*comb[0], *comb[1])), dist);
+        }
+        
+        println!("no. of places: {:?}", places.len());
+        let lower_bound = get_highest_cost_one_tree(places.clone(), dist_vec.clone()).1;
+        println!("lower_bound: {}", lower_bound);
+        let greedy_dist = greedy(places.clone(), dist_vec.clone(), dist_hm.clone());
+        let annealing_dist = annealing(5.0*60.0, 100000000000000, 10000.0, places.clone(), dist_vec.clone(), dist_hm.clone());
+        let nearest_neighbour_dist = nearest_neighbour(places.clone(), dist_vec.clone(), dist_hm.clone());
+        let natural_selection_dist = natural_selection(5.0 * 60.0, 10000000000000, 100000, places.clone(), dist_vec.clone(), dist_hm.clone());
+        let ant_colony_dist = ant_colony(5.0 * 60.0, 10000000000000, 5000, 1.0, 0.2,places.clone(), dist_vec.clone(), dist_hm.clone());
+        let name = format!("./results/{:?}.txt", rand::random::<u64>());
+        output(name.to_string(), format!("{}\n{}\n{}\n{}\n{}\n{}\n{}", places.len(), lower_bound, greedy_dist, nearest_neighbour_dist, natural_selection_dist, ant_colony_dist, annealing_dist));
+    }
+}
+
+fn annealing(time_limit: f64, repeatn : usize, t_graph_coefficient : f64, mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) -> f64
+{
+    let start = Instant::now();
+
+    let mut path = (0..places.len()).collect::<Vec<usize>>();
+    let path_len = path.len();
+    path.shuffle(&mut rand::thread_rng());
+
+    let mut eu_path = path.clone();
+    eu_path.push(path[0]);
+
+    let mut current_cost = cost_calc(eu_path.clone(), dist_hm.clone());
+
     
-    //let end_pos : Place = Place::new(40.0, 40.0);
-    // create positions from text file
-    let mut places : Vec<Place> = vec![];
-    // if let Ok(lines) = read_lines("places.txt") 
-    // {
-    //     for line in lines 
-    //     {
-    //         if let Ok(l) = line 
-    //         {
-    //             let temp = l.split(",").map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>();
-    //             places.push(Place::new(temp[0], temp[1]));
-    //         }
-    //     }
-    // }
-
-    for _ in 0..thread_rng().gen_range(4..30)
+    for i in 0..(repeatn)
     {
-        places.push(Place::new(thread_rng().gen_range(0.0..100.0), thread_rng().gen_range(0.0..100.0)));
+        if start.elapsed().as_secs_f64() > time_limit
+        {
+            return current_cost;
+        }
+        let mut temp : f64 = 0.999994_f64.powf(i as f64);
+        
+        let original_path = path.clone();
+        path.swap(thread_rng().gen_range(0..path_len), thread_rng().gen_range(0..path_len));
+        eu_path = path.clone();
+        eu_path.push(path[0]);
+        let new_cost = cost_calc(eu_path.clone(), dist_hm.clone());
+        if new_cost > current_cost
+        {
+            let prob = core::f64::consts::E.powf( (current_cost - new_cost) / temp);
+            if rand::thread_rng().gen_range(0.0..1.0) > prob
+            {
+                path = original_path;
+            }
+            else
+            {
+                current_cost = new_cost;
+            }
+        }
+        else
+        {
+            current_cost = new_cost;
+        }
+        
     }
-
-    let mut dist_vec : Vec<((usize, usize), f64)> = vec![];
-    let items : Vec<usize> = (0..places.len()).collect();
-    for comb in items.iter().combinations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
-    {
-        let dist = ((places[*comb[0]].x - places[*comb[1]].x).powf(2.0) + (places[*comb[0]].y - places[*comb[1]].y).powf(2.0)).sqrt();
-        dist_vec.push( ((*comb[0], *comb[1]), dist) );
-    }
-    let mut dist_hm : HashMap<(usize, usize), f64> = HashMap::new();
-    for comb in items.iter().combinations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
-    {
-        let dist = ((places[*comb[0]].x - places[*comb[1]].x).powf(2.0) + (places[*comb[0]].y - places[*comb[1]].y).powf(2.0)).sqrt();
-        dist_hm.insert((min(*comb[0], *comb[1]), max(*comb[0], *comb[1])), dist);
-    }
-    
-    println!("no. of places: {:?}", places.len());
-    let lower_bound = get_highest_cost_one_tree(places.clone(), dist_vec.clone()).1;
-    println!("lower_bound: {}", lower_bound);
-
-    let greedy_dist = greedy(places.clone(), dist_vec.clone(), dist_hm.clone());
-    let nearest_neighbour_dist = nearest_neighbour(places.clone(), dist_vec.clone(), dist_hm.clone());
-    let natural_selection_dist = natural_selection(5.0*60.0, 10000000000000, 50000, places.clone(), dist_vec.clone(), dist_hm.clone());
-    let ant_colony_dist = ant_colony(5.0*60.0, 10000000000000, 5000, 1.0, 0.5,places.clone(), dist_vec.clone(), dist_hm.clone());
-    let name = format!("./{:?}.txt", rand::random::<u64>());
-    output(name.to_string(), format!("number of locations:{} \nlower_bound: {}\ngreedy: {} \nnearest_neighbour: {} \nnatural_selection: {} \nant_colony: {}", places.len(), lower_bound, greedy_dist, nearest_neighbour_dist, natural_selection_dist, ant_colony_dist));
-
+    return current_cost;
 }
 
 fn natural_selection(time_limit: f64, repeatn : usize, population_size : usize, mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) -> f64
@@ -248,7 +297,7 @@ fn nearest_neighbour(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f6
 
 fn ant_colony(time_limit: f64, repeatn : usize, population_size : usize, dweight_multiplier: f64, rweight_multiplier: f64, mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) -> f64
 {
-    let mut start = Instant::now();
+    let startt = Instant::now();
     let antn = population_size;
     let mut reward_matrix = vec![vec![1.0; places.len()]; places.len()];
     let mut best_edges : Vec<(usize, usize)> = vec![];
@@ -256,7 +305,7 @@ fn ant_colony(time_limit: f64, repeatn : usize, population_size : usize, dweight
 
     for _ in 0..repeatn
     {
-        if start.elapsed().as_secs_f64() > time_limit
+        if startt.elapsed().as_secs_f64() > time_limit
         {
             break;
         }
@@ -484,28 +533,17 @@ fn one_tree(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>, excl
 }
 
 
-fn path_checker(dist_hm : HashMap<(usize, usize), f64>)
+fn cost_calc(path : Vec<usize>, dist_hm : HashMap<(usize, usize), f64>) -> f64
 {
-    let mut a = 0.0;
-    let b = vec![1,5,11,10,9,4,13,15,19,18,17,3,8,12,14,7,6,0,2,16,1];
-    for i in 0..(b.len() - 1)
+    let mut cost = 0.0;
+    for i in 0..(path.len() - 1)
     {
-        a += dist_hm.get(&(min(b[i], b[i + 1]), max(b[i], b[i + 1]))).unwrap();
+        cost += dist_hm.get(&(min(path[i], path[i + 1]), max(path[i], path[i + 1]))).unwrap();
     }
-    println!("a: {}", a);
+    return  cost;
 }
 
 fn output(name : String, string : String)
 {
-    // let f = Path::new(&name);
-    // let mut file = OpenOptions::new()
-    //     .write(true)
-    //     .append(true)
-    //     .open(name)
-    //     .unwrap();
-
-    // if let Err(e) = writeln!(file, "{string}") {
-    //     eprintln!("Couldn't write to file: {}", e);
-    // }
     fs::write(name, string).expect("Unable to write file");
 }
