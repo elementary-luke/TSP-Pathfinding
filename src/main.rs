@@ -1,19 +1,14 @@
 // ant colony
-use std::f32::consts::E;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::{Path, self};
 use itertools::{Itertools as it, enumerate};
 use rand::distributions::WeightedIndex;
-use rand::distributions::weighted::alias_method::Weight;
-use rayon::{vec, string};
 use std::collections::HashMap;
 use std::cmp::{min, max};
 use std::time::{Duration, Instant};
 use rand::prelude::*;
 use rand::thread_rng;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
 use std::fs;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
@@ -75,20 +70,62 @@ fn main()
             dist_hm.insert((min(*comb[0], *comb[1]), max(*comb[0], *comb[1])), dist);
         }
         
+        println!("please wait by default 20 mins for results to be generated in the results folder:");
         println!("no. of places: {:?}", places.len());
         let lower_bound = get_highest_cost_one_tree(places.clone(), dist_vec.clone()).1;
         println!("lower_bound: {}", lower_bound);
         let greedy_dist = greedy(places.clone(), dist_vec.clone(), dist_hm.clone());
-        let annealing_dist = annealing(5.0*60.0, 100000000000000, 10000.0, places.clone(), dist_vec.clone(), dist_hm.clone());
         let nearest_neighbour_dist = nearest_neighbour(places.clone(), dist_vec.clone(), dist_hm.clone());
         let natural_selection_dist = natural_selection(5.0 * 60.0, 10000000000000, 100000, places.clone(), dist_vec.clone(), dist_hm.clone());
         let ant_colony_dist = ant_colony(5.0 * 60.0, 10000000000000, 5000, 1.0, 0.2,places.clone(), dist_vec.clone(), dist_hm.clone());
+        let random_swapping = random_swapping(5.0*60.0, 100000000000000, places.clone(), dist_vec.clone(), dist_hm.clone());
+        let annealing_dist = annealing(5.0*60.0, 100000000000000, places.clone(), dist_vec.clone(), dist_hm.clone());
         let name = format!("./results/{:?}.txt", rand::random::<u64>());
-        output(name.to_string(), format!("{}\n{}\n{}\n{}\n{}\n{}\n{}", places.len(), lower_bound, greedy_dist, nearest_neighbour_dist, natural_selection_dist, ant_colony_dist, annealing_dist));
+        output(name.to_string(), format!("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}", places.len(), lower_bound, greedy_dist, nearest_neighbour_dist, natural_selection_dist, ant_colony_dist, random_swapping, annealing_dist));
     }
 }
 
-fn annealing(time_limit: f64, repeatn : usize, t_graph_coefficient : f64, mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) -> f64
+fn random_swapping(time_limit: f64, repeatn : usize, mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) ->f64
+{
+    let start = Instant::now();
+
+    let mut path = (0..places.len()).collect::<Vec<usize>>();
+    let path_len = path.len();
+    path.shuffle(&mut rand::thread_rng());
+    let mut eu_path = path.clone();
+    eu_path.push(path[0]);//path is now a loop so cost can be calculated
+    let mut current_cost = cost_calc(eu_path.clone(), dist_hm.clone());
+
+    for i in 0..repeatn
+    {
+        if start.elapsed().as_secs_f64() > time_limit
+        {
+            return current_cost;
+        }
+        let mut temp : f64 = 0.999994_f64.powf(i as f64);
+        
+        let old = path.clone();
+        path.swap(thread_rng().gen_range(0..path_len), thread_rng().gen_range(0..path_len)); // swap 2 random cities
+        eu_path = path.clone();
+        eu_path.push(path[0]);
+        let new_cost = cost_calc(eu_path.clone(), dist_hm.clone());
+
+        //if switch is improvement accept new tour, else discard
+        if new_cost < current_cost
+        {
+            current_cost = new_cost;
+        }
+        else
+        {
+            path = old;
+        }
+        
+    }
+    println!("random swapping: {}", current_cost);
+    return current_cost;
+}
+
+fn annealing(time_limit: f64, repeatn : usize, mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) -> f64
 {
     let start = Instant::now();
 
@@ -102,7 +139,7 @@ fn annealing(time_limit: f64, repeatn : usize, t_graph_coefficient : f64, mut pl
     let mut current_cost = cost_calc(eu_path.clone(), dist_hm.clone());
 
     
-    for i in 0..(repeatn)
+    for i in 0..repeatn
     {
         if start.elapsed().as_secs_f64() > time_limit
         {
@@ -115,9 +152,9 @@ fn annealing(time_limit: f64, repeatn : usize, t_graph_coefficient : f64, mut pl
         eu_path = path.clone();
         eu_path.push(path[0]);
         let new_cost = cost_calc(eu_path.clone(), dist_hm.clone());
-        if new_cost > current_cost
+        if new_cost > current_cost //if switch is worse accept with probability modelled by exponential
         {
-            let prob = core::f64::consts::E.powf( (current_cost - new_cost) / temp);
+            let prob = core::f64::consts::E.powf( (current_cost - new_cost) / temp); 
             if rand::thread_rng().gen_range(0.0..1.0) > prob
             {
                 path = original_path;
@@ -127,12 +164,13 @@ fn annealing(time_limit: f64, repeatn : usize, t_graph_coefficient : f64, mut pl
                 current_cost = new_cost;
             }
         }
-        else
+        else // if improvement accept
         {
             current_cost = new_cost;
         }
         
     }
+    println!("random swapping: {}", current_cost);
     return current_cost;
 }
 
@@ -140,6 +178,7 @@ fn natural_selection(time_limit: f64, repeatn : usize, population_size : usize, 
 {
     let start = Instant::now();
     let mut paths : Vec<(Vec<usize>, f64)> = vec![];
+    //create base population of random paths
     for _ in 0..population_size
     {
         let mut path = (0..places.len()).collect::<Vec<usize>>();
@@ -192,10 +231,10 @@ fn natural_selection(time_limit: f64, repeatn : usize, population_size : usize, 
             new_paths[i].1 = dist;
         }
         paths.append(&mut new_paths);
-        paths.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        paths = paths[0..population_size / 2].to_vec();
+        paths.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap()); // sort by dist
+        paths = paths[0..population_size / 2].to_vec(); // get rid off bottom half
     }
-    println!("best path: {:?} with distance: {}", paths[0].0, paths[0].1);
+    println!("random natural selection: {}", paths[0].1);
     return paths[0].1;
 }
 
@@ -206,6 +245,7 @@ fn greedy(mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, di
     let mut total_dist : f64 = 0.0;
 
 
+    //repeatedly add closest edge
     for ((from, to), dist) in dist_vec.clone()
     {
         if places[from].links.len() < 2 && places[to].links.len() < 2
@@ -226,6 +266,7 @@ fn greedy(mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, di
         }
     }
 
+    //add path back
     let mut last_link : Option<usize> = None;
     for i in 0..places.len()
     {
@@ -244,7 +285,7 @@ fn greedy(mut places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>, di
         }
         //println!("{}: {:?}", i, places[i].links);
     }
-    println!("total dist: {total_dist}");
+    println!("greedy: {}", total_dist);
     return total_dist;
 }
 
@@ -266,7 +307,7 @@ fn nearest_neighbour(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f6
     let mut current : usize = 0;
     for i in 0..places.len()
     {
-        for j in dist_vec.iter()
+        for j in dist_vec.iter() // take path to closest neighbour city
         {
             if j.0.0 == current && j.0.1 != 0 // make sure we dont go back to the start point prematurely
             {
@@ -283,15 +324,14 @@ fn nearest_neighbour(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f6
             }
         }
     }
+    // add the distance from the last place to the start
     dist_vec.retain(|x| x.0.0 == current && x.0.1 == 0);
     path.push(current);
 
-    total_dist += dist_vec[0].1; // add the distance from the last place to the start
+    total_dist += dist_vec[0].1; 
     //println!("{} -> 0 : {}m", current, dist_vec[0].1);
     path.push(0);
-    println!("dist : {}m path: {:?}",total_dist, path);
-    
-    println!("took {} seconds to complete", start.elapsed().as_secs_f64());
+    println!("nearest neighbour: {}", total_dist);
     return total_dist;
 }
 
@@ -333,7 +373,8 @@ fn ant_colony(time_limit: f64, repeatn : usize, population_size : usize, dweight
                 for i in 0..dists_to_neighbours.len()
                 {
                     let reward = reward_matrix[dists_to_neighbours[i].0.0][dists_to_neighbours[i].0.1];
-                    dists_to_neighbours[i].1 = (1.0 / dists_to_neighbours[i].1 * dweight_multiplier) * reward * rweight_multiplier / (sum_of_inverses * reward * rweight_multiplier);
+                    let sum_adj_rewards = reward_matrix[dists_to_neighbours[i].0.0].iter().sum::<f64>() + reward_matrix[dists_to_neighbours[i].0.1].iter().sum::<f64>();
+                    dists_to_neighbours[i].1 = (1.0 / dists_to_neighbours[i].1 * dweight_multiplier) * reward * rweight_multiplier / (sum_of_inverses * sum_adj_rewards * rweight_multiplier);
                 }
 
                 //get next position based on distribution
@@ -375,8 +416,7 @@ fn ant_colony(time_limit: f64, repeatn : usize, population_size : usize, dweight
             }
         }
     }
-    println!("best edges: {:?}", best_edges);
-    println!("best cost: {}", best_cost);
+    println!("ant colony: {}", best_cost);
     return best_cost;
 }
 
@@ -393,12 +433,14 @@ fn find_mst(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>) -> (
             break;
         }
         let mut mst_edges = dist_vec.clone();
-        mst_edges.retain(|&x| visited.contains(&x.0.0) != visited.contains(&x.0.1));
+        mst_edges.retain(|&x| visited.contains(&x.0.0) != visited.contains(&x.0.1)); // get edges that connect visited and unvisited
         mst_edges.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         
         let old_places = places.clone();
         places[mst_edges[0].0.0].links.push(mst_edges[0].0.1);
         places[mst_edges[0].0.1].links.push(mst_edges[0].0.0);
+
+        // make sure no closed loops
         if closed_loop(&places, mst_edges[0].0.0)
         {
             places = old_places;
@@ -435,11 +477,13 @@ fn closed_loop(places : &Vec<Place>, mut index : usize) -> bool
             return false
         }
 
+        //if both links are in visited then there is a closed loop
         if visited.contains(&places[index].links[0]) && visited.contains(&places[index].links[1])
         {
             return true
         }
 
+        //if one link is in visited then go to the other link
         let temp = visited.clone();
         visited.push(index);
         if temp.contains(&places[index].links[0])
@@ -457,12 +501,13 @@ fn get_highest_cost_one_tree(places : Vec<Place>, dist_vec : Vec<((usize, usize)
 {
     let mut one_trees : Vec<(Vec<Place>, f32)> = vec![];
 
+    //get every possible one tree, excluding every city once
     for i in 0..places.len()
     {
         one_trees.push(one_tree(places.clone(), dist_vec.clone(), i));
     }
 
-    //make highest cost first
+    //sort so highest cost is first
     one_trees.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     one_trees.reverse();
     
@@ -484,7 +529,7 @@ fn one_tree(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>, excl
     let mut mst_cost = 0.0;
 
 
-    // do with exclusion
+    // get mst with exclusion
     loop
     {
         if visited.len() == places.len() - 1
@@ -514,7 +559,7 @@ fn one_tree(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>, excl
             visited.push(mst_edges[0].0.0);
         }
     }
-    //add last 1 back in
+    //add last city back in
     let mut mst_edges = dist_vec.clone();
     mst_edges.retain(|&x| x.0.0 == exclude || x.0.1 == exclude);
     mst_edges.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
