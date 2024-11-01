@@ -21,4 +21,4 @@ Random Swapping           1.44725
 
 Ant colony Optimisation   1.58841
 
-!()[https://github.com/elementary-luke/TSP-Pathfinding/blob/main/graphed_results.png?raw=true]
+![](https://github.com/elementary-luke/TSP-Pathfinding/blob/main/graphed_results.png?raw=true)
