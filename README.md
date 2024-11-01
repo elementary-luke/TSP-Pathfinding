@@ -8,7 +8,10 @@ They tested in a map of a random number of cities that were randomly positioned.
 All implementations were coded in Rust.
 
 # Configuration
+
 5 minutes were given for all the iterative algorithms.
+
+The temperature graph used for simulated annealing was 0.999994^x where x is the number of iterations that have occured.
 
 The genetic algorithm started with a population of of 100,000 random paths. The worse half in terms of performance was killed off and the better half was cloned 2 of the cities were swapped in the clone. This was repeated and the cost top path was used after all iterations.
 
