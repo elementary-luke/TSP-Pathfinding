@@ -30,6 +30,7 @@ impl Place
     }
 
 }
+
 fn main() 
 {
     //let end_pos : Place = Place::new(40.0, 40.0);
