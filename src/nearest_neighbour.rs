@@ -1,20 +1,7 @@
-use std::collections::HashMap;
-use itertools::Itertools as it;
-use std::time::Instant;
 use crate::shared::*;
 
-pub fn nearest_neighbour(mut places : Vec<Place>, dist_vec : Vec<((usize, usize), f64)>, dist_hm : HashMap<(usize, usize), f64>) -> f64
+pub fn nearest_neighbour(places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>) -> f64
 {
-    let mut dist_vec : Vec<((usize, usize), f64)> = vec![];
-    let mut items : Vec<usize> = (0..places.len()).collect();
-    for perm in items.iter().permutations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
-    {
-        let mut dist = ((places[*perm[0]].x - places[*perm[1]].x).powf(2.0) + (places[*perm[0]].y - places[*perm[1]].y).powf(2.0)).sqrt();
-        dist_vec.push( ((*perm[0], *perm[1]), dist) );
-    }
-
-
-    let mut start = Instant::now();
     dist_vec.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     let mut total_dist : f64 = 0.0;
     let mut path = vec![];
@@ -30,6 +17,7 @@ pub fn nearest_neighbour(mut places : Vec<Place>, dist_vec : Vec<((usize, usize)
                 path.push(current);
                 current = j.0.1;
                 //println!("{} -> {} : {}m", last, current, j.1);
+                //make sure link can't be made again to the node we were at before
                 if j.0.0 != 0
                 {
                     dist_vec.retain(|x| x.0.1 != last);
