@@ -59,7 +59,7 @@ fn main()
         let lower_bound = get_highest_cost_one_tree(places.clone(), dist_vec.clone()).1;
         println!("lower_bound: {}", lower_bound);
         let greedy_dist = greedy(places.clone(), dist_vec.clone(), dist_hm.clone());
-        let nearest_neighbour_dist = nearest_neighbour(places.clone(), dist_vec.clone());
+        let nearest_neighbour_dist = nearest_neighbour(places.clone());
         let natural_selection_dist = genetic(max_mins * 60.0, max_iterations, 100000, places.clone(), dist_hm.clone());
         let ant_colony_dist = ant_colony(max_mins * 60.0, max_iterations, 5000, 1.0, 0.2,places.clone(), dist_vec.clone(), dist_hm.clone());
         let random_swapping = random_swapping(max_mins* 60.0, max_iterations, places.clone(), dist_hm.clone());

@@ -1,7 +1,15 @@
 use crate::shared::*;
+use itertools::Itertools as it;
 
-pub fn nearest_neighbour(places : Vec<Place>, mut dist_vec : Vec<((usize, usize), f64)>) -> f64
+pub fn nearest_neighbour(places : Vec<Place>) -> f64
 {
+    let mut dist_vec : Vec<((usize, usize), f64)> = vec![];
+    let items : Vec<usize> = (0..places.len()).collect();
+    for perm in items.iter().permutations(2).unique() // time to get from 2nd place to 3rd is the same as 3rd to 2nd
+    {
+        let dist = ((places[*perm[0]].x - places[*perm[1]].x).powf(2.0) + (places[*perm[0]].y - places[*perm[1]].y).powf(2.0)).sqrt();
+        dist_vec.push( ((*perm[0], *perm[1]), dist) );
+    }
     dist_vec.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     let mut total_dist : f64 = 0.0;
     let mut path = vec![];
